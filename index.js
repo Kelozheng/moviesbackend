@@ -2,23 +2,20 @@ const express = require('express')
 
 const app = express();
 
-const cors = (req,res,next)=>{
-  res.setHeader('Access-Control-Allow-Origin','*');
-  res.setHeader('Access-Control-Allow-Methods','*');
-  res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');
-  if (req.method === 'OPTIONS'){
-    return res.status(200).end();
-  }
-  
+function cors(req, res, next) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'content-type');
   next();
-
 }
+
 app.use(cors);
 
 app.use(express.json());
 
 
-let movieIdCounter=4;
+let movieIdCounter=1;
+let reviewIdCounter=1;
 
 let movies = [
   {
@@ -57,63 +54,14 @@ let movies = [
   }
 ];
 
-movieExist = (movie)=>{
-  
+getMovieById=(id)=>{
+  const movie= movies.find((movie)=>movie.id===parseInt(id));
   if (!movie){
     return {message:"no movie found"}
   }
   return movie;
-
-}
-
-getMovieById=(id)=>{
-  const movie= movies.find((movie)=>movie.id===parseInt(id));
-  return movieExist(movie);
  
 }
-app.get('/v1/movies',(req,res)=>{
-  const {keyword,pageSize,page,sort}=req.query;
-
-  if(keyword){
-    const movie= movies.filter((m)=>m.title.toLowerCase().includes(keyword.toLowerCase()))
-    const result=movieExist(movie);
-
-    if (result.message){
-      return res.status(404).json(result);
-    }
-    return res.status(200).json(result)
-
-  }
-
-  if(sort=="rating"){
-   const sortMovies=movies.sort((a,b)=>b.averageRating - a.averageRating)
-   return res.status(200).json(sortMovies)
-  }
-  else if (sort=="-rating"){
-   const sortMovies= movies.sort((a,b)=>a.averageRating - b.averageRating)
-   return res.status(200).json(sortMovies)
-    
-  }
-
-
-  if (!movies){
-    return res.status(404).json({error:'not movies exist'})
-  }
-
-  res.status(200).json(movies);
-  
-})
-
-app.get('/v1/movies/:id', (req,res)=>{
-  const {id}= req.params;
-  const result = getMovieById(id);
-  if(result.message){
-    return res.status(404).json(result)
-  }
-
-  res.status(200).json(result);
-}
-)
 
 app.post('/v1/movies',(req,res)=>{
   const {title, description, types} = req.body;
@@ -133,6 +81,53 @@ app.post('/v1/movies',(req,res)=>{
   res.status(201).json({message:"movie create success", movie:newMovie})
 
 })
+
+app.get('/v1/movies',(req,res)=>{
+  const {keyword,pageSize,page,sort}=req.query;
+
+  if(keyword){
+    const movie= movies.filter((m)=>m.title.toLowerCase().includes(keyword.toLowerCase()))
+
+    if (movie.message){
+      return res.status(404).json(movie);
+    }
+    return res.status(200).json(movie)
+  }
+
+  if(sort=="rating"){
+   const sortMovies=movies.sort((a,b)=>b.averageRating - a.averageRating)
+   return res.status(200).json(sortMovies)
+  }
+
+  else if (sort=="-rating"){
+   const sortMovies= movies.sort((a,b)=>a.averageRating - b.averageRating)
+   return res.status(200).json(sortMovies) 
+  }
+
+  if(pageSize || page){
+    const startMovieIndex= (parseInt(page)-1)*parseInt(pageSize);
+    const endMovieIndex=startMovieIndex+parseInt(pageSize);
+    const returnMovies=movies.slice(startMovieIndex,endMovieIndex)
+    return res.status(200).json(returnMovies);
+}
+  if (!movies){
+    return res.status(404).json({error:'not movies exist'})
+  }
+
+  res.status(200).json(movies);
+  
+})
+
+app.get('/v1/movies/:id', (req,res)=>{
+  const {id}= req.params;
+  const result = getMovieById(id);
+  if(result.message){
+    return res.status(404).json(result)
+  }
+
+  res.status(200).json(result);
+}
+)
 
 app.delete('/v1/movies/:id',(req,res)=>{
   const {id}=req.params;
@@ -166,7 +161,40 @@ app.put('/v1/movies/:id',(req,res)=>{
   res.status(200).json({message:"update successfully", movie:movie})
 })
 
+app.post("/v1/movies/:id/reviews",(req,res)=>{
+  const {id}=req.params;
+  const {content, rating}= req.body;
+  const movie=getMovieById(id);
+  if(movie.message){
 
+    return res.status(404).json(movie)
+  }
+  if (!content || !rating || !Number.isInteger(rating)){
+    return res.status(404).json("content and rating (must be number)) are required")
+  }
+  const newReview= {
+    id:reviewIdCounter++,
+    content,
+    rating
+  }
+  movie.reviews.push(newReview)
+  const totalRating = movie.reviews.reduce((sum,review)=>sum+review.rating,0)
+  movie.averageRating=(totalRating/movie.reviews.length).toFixed(1)
+ 
+  return res.status(201).json({message:"view created succeed", data:movie})
+})
+
+app.get("/v1/movies/:id/reviews",(req,res)=>{
+  const {id} = req.params;
+  const movie=getMovieById(id);
+
+  if(movie.message){
+
+    return res.status(404).json(movie)
+  }
+  res.status(200).json(movie)
+
+})
 
 app.listen(3000,()=>{
   console.log(`Server is running on http://localhost:3000`);
